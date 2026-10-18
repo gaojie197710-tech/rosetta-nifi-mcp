@@ -13,6 +13,10 @@ and puts it under version control.**
 
 [中文版](README.zh-CN.md) · [License: Elastic 2.0](LICENSE) · Apache NiFi 2.x · Python 3.12+
 
+![Rosetta NiFi MCP demo: a flow described in one sentence, built with one build_flow call, running in NiFi](docs/media/demo.gif)
+
+<sub>[Watch as MP4](docs/media/demo.mp4)</sub>
+
 ---
 
 ## Why
@@ -92,7 +96,8 @@ The assistant reads `get_design_guide`, looks up the processor schemas, and send
      "auto_terminate": ["unmatched"],
      "comments": "Orders without an id are dropped on purpose."},
     {"name": "write", "type": "org.apache.nifi.processors.standard.PutFile",
-     "properties": {"Directory": "#{out.dir}"}, "auto_terminate": ["success", "failure"]}
+     "properties": {"Directory": "#{out.dir}"}, "auto_terminate": ["success", "failure"],
+     "comments": "End of the flow; failures stay visible as bulletins."}
   ],
   "connections": [
     {"source": "receive orders", "destination": "stamp", "relationships": ["success"]},

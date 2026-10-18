@@ -12,6 +12,8 @@ Rosetta NiFi MCP 是 Apache NiFi 2.x 的 MCP 服务。第一阶段只读：画�
 provenance。第二阶段加入搭建、运行和测试流程的工具；第三阶段加入 Flow Registry 版本管理、流程定义导出导入和画布自动布局。
 写工具只在 `NIFI_MCP_ALLOW_WRITES=true` 时注册。
 
+![演示：一句话描述流程，一次 build_flow 调用建好，在 NiFi 中实际运行](docs/media/demo.gif)
+
 ## 布局
 
 | 路径 | 内容 |
