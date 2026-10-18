@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "nifi": {
+      "command": "uv",
+      "args": ["run", "--directory", ".", "rosetta-nifi-mcp"],
+      "env": { "NIFI_URL": "https://localhost:9443", "NIFI_MCP_ALLOW_WRITES": "true" }
+    }
+  }
+}

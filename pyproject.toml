@@ -1,0 +1,24 @@
+[project]
+name = "rosetta-nifi-mcp"
+version = "0.1.0"
+license = "Elastic-2.0"
+license-files = ["LICENSE"]
+description = "Rosetta NiFi MCP: MCP server for exploring, building, testing and releasing Apache NiFi 2.x flows."
+readme = "README.md"
+authors = [
+    { name = "高杰", email = "gaojie197710@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=50.0.2",
+    "httpx>=0.28.1",
+    "mcp[cli]>=2.3.0",
+    "pyyaml>=6.0.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+rosetta-nifi-mcp = "rosetta_nifi_mcp.server:main"

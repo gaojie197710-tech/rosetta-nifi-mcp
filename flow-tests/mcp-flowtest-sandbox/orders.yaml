@@ -1,0 +1,27 @@
+# Sample suite for the sandbox flow scripts/e2e_flow_tests_test.py builds:
+# tag (UpdateAttribute) -> wrap (ReplaceText) -> out (funnel).
+- name: order with id is checked and wrapped
+  input:
+    content: '{"order": 42}'
+    attributes:
+      order.id: "42"
+  target: tag
+  output: {from: wrap, relationship: success}
+  expect:
+    attributes:
+      order.checked: "true"
+      greeting: hello
+    content:
+      json_subset: {wrapped: {order: 42}, by: hello}
+
+- name: order without id is not checked
+  input:
+    content: "7"
+  target: tag
+  output: {from: wrap, relationship: success}
+  expect:
+    attributes:
+      order.checked: "false"
+      order.id: null
+    content:
+      exact: '{"wrapped": 7, "by": "hello"}'

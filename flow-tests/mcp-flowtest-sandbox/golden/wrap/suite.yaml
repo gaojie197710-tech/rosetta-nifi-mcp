@@ -1,0 +1,7 @@
+# Golden pairs for the sandbox flow: tag (UpdateAttribute) -> wrap (ReplaceText).
+target: tag
+output: {from: wrap, relationship: success}
+match: json
+threshold: 99.5
+batch_size: 100
+timeout: 30

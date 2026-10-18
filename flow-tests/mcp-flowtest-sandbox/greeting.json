@@ -1,0 +1,7 @@
+{
+  "name": "greeting appears in content",
+  "input": {"content": "\"hi\"", "attributes": {"source": "json-case"}},
+  "target": "tag",
+  "output": {"from": "wrap", "relationship": "success"},
+  "expect": {"attributes": {"source": "json-case"}, "content": {"contains": "\"by\": \"hello\""}}
+}
