@@ -1,6 +1,6 @@
 # rosetta-nifi-mcp — 本库约定
 
-- 代码、注释、标识符英文；README、`docs/**` 中文。
+- 代码、注释、标识符英文；`README.md` 英文（面向开源用户，Jack 2026-10-18 定），中文版在 `README.zh-CN.md`，两者同步；`docs/**` 中文。
 - Python 包名 `rosetta_nifi_mcp`，命令 `rosetta-nifi-mcp`。环境变量 `NIFI_*`/`NIFI_MCP_*`、证书身份 `CN=nifi-mcp`、
   `~/.nifi-mcp` 目录是已部署实例的运行契约，不随品牌改名。
 - 写工具只在 `NIFI_MCP_ALLOW_WRITES=true` 时注册；新增写工具同样受此开关约束。
