@@ -119,16 +119,63 @@ def _layers(nodes: dict[str, dict], edges: list[tuple[str, str, dict]]) -> tuple
     return comps, back
 
 
+SIDE_SINKS = ("funnel", "output_port")
+SIDE_COLUMN = 300   # feeder's right edge to its side sinks: a connection label (240) fits in between
+SIDE_STEP = 70      # vertical distance between side sinks of one feeder (a label is 41 tall)
+LANE_STEP = 280     # distance between shared side lanes
+LANE_ROW = 50       # vertical distance between one feeder's lines into different lanes
+
+
+def _is_side(c: dict) -> bool:
+    """A connection that carries something other than the main result: it names relationships or comes out of
+    a child group's port, and none of them is success."""
+    comp = c.get("component") or {}
+    names = list(comp.get("selectedRelationships") or [])
+    src = comp.get("source") or {}
+    if src.get("type") == "OUTPUT_PORT" and src.get("groupId") != comp.get("parentGroupId"):
+        names.append(src.get("name", ""))
+    return bool(names) and "success" not in names
+
+
+def _side_sinks(nodes: dict[str, dict], edges: list[tuple[str, str, dict]]) -> dict[str, list[str]]:
+    """Funnels and output ports that only take side connections and feed nothing: sink -> its feeders."""
+    feeders: dict[str, list[str]] = defaultdict(list)
+    side_only: dict[str, bool] = defaultdict(lambda: True)
+    has_out = {s for s, d, _ in edges if s != d}
+    for s, d, c in edges:
+        if s != d and s not in feeders[d]:
+            feeders[d].append(s)
+        side_only[d] &= _is_side(c)
+    return {n: feeders[n] for n in nodes if nodes[n]["kind"] in SIDE_SINKS and n not in has_out
+            and feeders[n] and side_only[n] and n not in feeders[n]}
+
+
 def plan_layout(nodes: dict[str, dict], edges: list[tuple[str, str, dict]]) -> tuple[dict[str, dict], dict[str, list[dict]]]:
-    comps, back = _layers(nodes, edges)
+    """Layers top to bottom. Side sinks (a failure or ledger funnel, say) stay out of the layers so the main
+    path reads straight down: a sink with one feeder sits in a column right of it, a sink shared by several
+    feeders at the foot of a vertical lane right of everything. A feeder must be last in its row, so its
+    lines run right into free space; otherwise its sinks stay in the layers."""
     if not nodes:
         return {}, {}
+    side = _side_sinks(nodes, edges)
+    while True:
+        core = [e for e in edges if e[0] not in side and e[1] not in side]
+        comps, back = _layers({n: v for n, v in nodes.items() if n not in side}, core)
+        comp_of = {n: i for i, comp in enumerate(comps) for row in comp for n in row}
+        last_in_row = {row[-1] for comp in comps for row in comp}
+        bad = {n for n, fs in side.items()
+               if any(f in side or f not in last_in_row for f in fs) or len({comp_of[f] for f in fs}) > 1}
+        if not bad:
+            break
+        side = {n: fs for n, fs in side.items() if n not in bad}
+
     x0 = min(n["pos"]["x"] for n in nodes.values())
     y0 = min(n["pos"]["y"] for n in nodes.values())
     positions: dict[str, dict] = {}
     comp_right: dict[str, float] = {}
+    side_bends: dict[str, list[dict]] = {}
     x_cursor = x0
-    for comp in comps:
+    for ci, comp in enumerate(comps):
         width = max(sum(nodes[n]["w"] for n in row) + COL_GAP * (len(row) - 1) for row in comp)
         y = y0
         for row in comp:
@@ -142,12 +189,53 @@ def plan_layout(nodes: dict[str, dict], edges: list[tuple[str, str, dict]]) -> t
         for row in comp:
             for n in row:
                 comp_right[n] = x_cursor + width
-        x_cursor += width + COMPONENT_GAP
+        right = x_cursor + width
+        layer_of = {n: i for i, row in enumerate(comp) for n in row}
+        if any(c["id"] in back or abs(layer_of[d] - layer_of[s]) > 1
+               for s, d, c in core if s in layer_of and d in layer_of and s != d):
+            right += 120   # room for the lane that loops and long edges take (comp_right + 60)
+        mine = sorted((n for n, fs in side.items() if comp_of[fs[0]] == ci), key=lambda n: nodes[n]["name"])
+        # One feeder: a column beside it, one sink per row, each line bending where its label sits.
+        column_x = right + SIDE_COLUMN
+        col_right = right
+        for f in [n for row in comp for n in row]:
+            own = [n for n in mine if side[n] == [f]]
+            fp = positions[f]
+            for k, n in enumerate(own):
+                cy = fp["y"] + 24 + SIDE_STEP * k
+                positions[n] = {"x": round(column_x), "y": round(cy - nodes[n]["h"] / 2)}
+                col_right = max(col_right, column_x + nodes[n]["w"])
+                for s, d, c in edges:
+                    if s == f and d == n:
+                        side_bends[c["id"]] = [{"x": round(column_x - SIDE_COLUMN / 2), "y": round(cy)}]
+        # Shared: one vertical lane per sink; each feeder's line bends into it at its own height (the label
+        # sits on that bend), and the sink waits at the lane's foot below everything.
+        shared = [n for n in mine if len(side[n]) > 1]
+        lane_x = (col_right if col_right > right else right) + 150
+        # At the last row's height when no feeder sits in it, else below it.
+        last_row = comp[-1]
+        bottom = y if any(f in last_row for n in shared for f in side[n]) else positions[last_row[0]]["y"]
+        for k, n in enumerate(shared):
+            lx = lane_x + LANE_STEP * k
+            positions[n] = {"x": round(lx - nodes[n]["w"] / 2), "y": round(bottom)}
+            for s, d, c in edges:
+                if d == n:
+                    j = sorted((m for m in shared if s in side[m]), key=shared.index).index(n)
+                    side_bends[c["id"]] = [{"x": round(lx), "y": round(positions[s]["y"] + 16 + LANE_ROW * j)}]
+        if shared:
+            right = lane_x + LANE_STEP * (len(shared) - 1) + 140
+        right = max(right, col_right)
+        for n in mine:
+            comp_right[n] = right
+        x_cursor = right + COMPONENT_GAP
 
     # Straight lines where possible; loops and edges that skip layers go around the right side.
     layer_of = {n: i for comp in comps for i, row in enumerate(comp) for n in row}
     bends: dict[str, list[dict]] = {}
     for s, d, c in edges:
+        if c["id"] in side_bends:
+            bends[c["id"]] = side_bends[c["id"]]
+            continue
         ps, pd = positions[s], positions[d]
         sx, sy = ps["x"] + nodes[s]["w"] / 2, ps["y"] + nodes[s]["h"] / 2
         dx, dy = pd["x"] + nodes[d]["w"] / 2, pd["y"] + nodes[d]["h"] / 2

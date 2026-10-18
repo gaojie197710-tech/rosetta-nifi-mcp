@@ -92,18 +92,47 @@ def plan_stack(items: dict[str, str], stacked: list[str], inputs: list[str], out
         positions[p] = (stack_x + k * 300, -200)
 
     feeders: dict[str, set[str]] = defaultdict(set)
+    side_only: dict[str, bool] = defaultdict(lambda: True)
+    outgoing: set[str] = set()
     for c in conns:
-        if c["dst"] in outputs:
-            feeders[c["dst"]].add(c["src"])
-    lanes = [p for p in outputs if len(feeders[p] & set(stacked)) >= 2]
+        feeders[c["dst"]].add(c["src"])
+        side_only[c["dst"]] &= bool(c.get("side"))
+        outgoing.add(c["src"])
+    first = stacked[0] if stacked else None
+    # Heads: components that only feed the first stage (a listener, say) sit above it, like input ports.
+    heads = [n for n in items if n not in positions and n not in stacked and n not in feeders
+             and all(c["dst"] == first for c in conns if c["src"] == n) and n in outgoing]
+    if heads:
+        tallest = max(size(items[n])[1] for n in heads)
+        x = gw / 2 - (sum(size(items[n])[0] for n in heads) + 120 * (len(heads) - 1)) / 2
+        for n in heads:
+            w, h = size(items[n])
+            positions[n] = (round(x), -tallest - 120 + (tallest - h) / 2)
+            x += w + 120
+    sinks = [n for n in items if items[n] in ("output_port", "funnel") and n not in outgoing and n not in positions]
+    lanes = [p for p in sinks if len(feeders[p] & set(stacked)) >= 2 and feeders[p] <= set(stacked)]
     lane_x: dict[str, float] = {}
     for k, p in enumerate(lanes):
         lane_x[p] = LEFT_LANE if k == 0 else RIGHT_LANE0 + (k - 1) * LANE_STEP
-        positions[p] = (lane_x[p] - size("output_port")[0] / 2, bottom)
+        positions[p] = (lane_x[p] - size(items[p])[0] / 2, bottom)
     last = stacked[-1] if stacked else None
-    for p in outputs:
-        if p not in positions and last in feeders[p] and len(feeders[p]) == 1:
-            positions[p] = (stack_x, bottom)
+    for p in sinks:
+        if p not in positions and feeders[p] == {last} and not side_only[p]:
+            positions[p] = (gw / 2 - size(items[p])[0] / 2, bottom)
+    # A side exit of one stage (its own failure funnel, say): a column right of the stack and its lanes, one
+    # row per sink; the line bends where its label sits, between the stack and the column.
+    column_x = (max(lane_x.values()) + 140 + 270 if len(lanes) > 1 else gw + 300)
+    per_stage: dict[str, int] = defaultdict(int)
+    for p in sinks:
+        if p in positions or len(feeders[p]) != 1 or not side_only[p] or next(iter(feeders[p])) not in stacked:
+            continue
+        g = next(iter(feeders[p]))
+        cy = positions[g][1] + 24 + 70 * per_stage[g]
+        per_stage[g] += 1
+        positions[p] = (column_x, round(cy - size(items[p])[1] / 2))
+        for c in conns:
+            if c["src"] == g and c["dst"] == p:
+                bends[c["idx"]] = [(column_x - 150, round(cy))]
 
     side = [n for n in items if n not in positions]
     if side:
@@ -126,7 +155,12 @@ def plan_stack(items: dict[str, str], stacked: list[str], inputs: list[str], out
         if d in lane_x:
             k = lanes.index(d)
             if s in stacked:
-                bends[idx] = [(lane_x[d], positions[s][1] + 60 + 50 * min(k, 3))]
+                y = positions[s][1] + 60 + 50 * min(k, 3)
+                if k == 0:
+                    bends[idx] = [(lane_x[d], y)]
+                else:  # level out just right of the stage, so the line passes under nearer lanes' labels
+                    bends[idx] = [(gw + 20, y), (lane_x[d], y)]
+                    labels[idx] = 1
             else:
                 # From the side block, out through the empty gap between it and the left lane, then down: the
                 # run out of the block takes the first clear row (the source's centre, or just above or below

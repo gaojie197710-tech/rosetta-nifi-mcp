@@ -58,18 +58,18 @@ def http_stage(s: StageSpec) -> dict:
              "Response Body Attribute Name": "stage.response", "Response Body Attribute Size": "4096",
              "Response Header Request Attributes Enabled": "true", "Response Header Request Attributes Prefix": "stage.h.",
              "Socket Read Timeout": s.read_timeout}},
-        {"name": "HTTP retry", "type": RETRY, "position": (450, 350), "penalty": s.retry_penalty,
+        {"name": "HTTP retry", "type": RETRY, "position": (650, 350), "penalty": s.retry_penalty,
          "comments": f"5xx, timeout or connection error: {s.retries} attempts, {s.retry_penalty} apart.",
          "properties": {"Retry Attribute": f"{p}.http.retries", "Maximum Retries": str(s.retries),
                         "Penalize Retries": "true", "Reuse Mode": "reset"}},
-        {"name": "Business or technical?", "type": ROUTE, "position": (-450, 550),
+        {"name": "Business or technical?", "type": ROUTE, "position": (-500, 550),
          "comments": "Only the business codes are a business 'no'; 401/403/408/429 are technical.",
          "properties": {"Routing Strategy": "Route to Property name",
                         "business": f"${{{status}:matches(${{stage.business_codes}})}}"}},
-        {"name": "Business rejection", "type": UPDATE_ATTRIBUTE, "position": (-450, 750),
+        {"name": "Business rejection", "type": UPDATE_ATTRIBUTE, "position": (-500, 750),
          "properties": {"error.code": f"${{{code_h}:isEmpty():ifElse(${{{status}:prepend('http_')}}, ${{{code_h}}})}}",
                         "error.msg": f"${{{msg_h}}}"}},
-        {"name": "Technical failure", "type": UPDATE_ATTRIBUTE, "position": (450, 750),
+        {"name": "Technical failure", "type": UPDATE_ATTRIBUTE, "position": (650, 750),
          "properties": {
              "error.code": (f"${{{code_h}:isEmpty():ifElse(${{{status}:isEmpty():ifElse('connection_error', "
                             f"${{{status}:prepend('http_')}})}}, ${{{code_h}}})}}"),
@@ -77,7 +77,9 @@ def http_stage(s: StageSpec) -> dict:
         {"name": "Keep result", "type": UPDATE_ATTRIBUTE, "position": (0, 750), "properties": dict(s.keep)},
     ]
     outputs = ["success", "rejected", "failure"] + (["ledger"] if s.ledger_port else [])
-    positions = {"in": (0, 0), "success": (0, 950), "rejected": (-450, 950), "failure": (450, 950), "ledger": (450, 150)}
+    # Columns at -500 / 0 / 650 leave room for a connection label (240 wide) between boxes; ports sit centred under
+    # their processors. Output ports are 240 wide, processors 352.
+    positions = {"in": (56, 0), "success": (56, 950), "rejected": (-444, 950), "failure": (706, 950), "ledger": (706, 190)}
     connections = [
         {"source": "in", "destination": "Enter stage"},
         {"source": "Enter stage", "destination": "Call API", "relationships": ["success"]},
@@ -87,7 +89,9 @@ def http_stage(s: StageSpec) -> dict:
         {"source": "HTTP retry", "destination": "Call API", "relationships": ["retry"]},
         {"source": "HTTP retry", "destination": "Technical failure", "relationships": ["retries_exceeded", "failure"]},
         {"source": "Business or technical?", "destination": "Business rejection", "relationships": ["business"]},
-        {"source": "Business or technical?", "destination": "Technical failure", "relationships": ["unmatched"]},
+        # Below the labels of Original and retries_exceeded, then down beside the retry line into the box.
+        {"source": "Business or technical?", "destination": "Technical failure", "relationships": ["unmatched"],
+         "bends": [(14, 670), (746, 670)]},
         {"source": "Business rejection", "destination": "rejected", "relationships": ["success"]},
         {"source": "Technical failure", "destination": "failure", "relationships": ["success"]},
         {"source": "Keep result", "destination": "success", "relationships": ["success"]},

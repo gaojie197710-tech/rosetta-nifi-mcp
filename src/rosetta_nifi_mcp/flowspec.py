@@ -230,10 +230,18 @@ def _items(g: GroupSpec) -> dict[str, str]:
     return items
 
 
+def _is_side(c: ConnectionSpec, g: GroupSpec, items: dict[str, str]) -> bool:
+    """Same rule as layout._is_side: named relationships or a child's output port, none of them success."""
+    names = list(c.relationships)
+    if c.source not in items:
+        names.append(split_end(c.source, [k.name for k in g.groups])[1])
+    return bool(names) and "success" not in names
+
+
 def _plan(g: GroupSpec) -> tuple[dict[str, tuple[float, float]], dict[int, list[tuple[float, float]]], dict[int, int]]:
     items = _items(g)
-    conns = [{"idx": i, "src": _drawn(c.source, g, items), "dst": _drawn(c.destination, g, items)}
-             for i, c in enumerate(g.connections)]
+    conns = [{"idx": i, "src": _drawn(c.source, g, items), "dst": _drawn(c.destination, g, items),
+              "side": _is_side(c, g, items)} for i, c in enumerate(g.connections)]
     labels: dict[int, int] = {}
     if g.layout == "stack":
         positions, bends, labels = plan_stack(items, [c.name for c in g.groups], g.input_ports, g.output_ports, conns)
