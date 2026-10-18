@@ -1,6 +1,6 @@
 [project]
 name = "rosetta-nifi-mcp"
-version = "0.1.0"
+version = "0.1.1"
 license = "Elastic-2.0"
 license-files = ["LICENSE"]
 description = "Rosetta NiFi MCP: MCP server for exploring, building, testing and releasing Apache NiFi 2.x flows."
